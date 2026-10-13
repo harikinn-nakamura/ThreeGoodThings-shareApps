@@ -5,13 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>スリーグッドシングス</title>
   <style>
-    /* 全体のスタイル */
     body { font-family: sans-serif; background-color: #4fb2c9; padding: 20px; margin: 0; }
     .container { background: white; border-radius: 20px; padding: 30px; max-width: 600px; margin: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
     h1 { color: #2a8b9d; text-align: center; margin-bottom: 10px;}
     .subtitle { text-align: center; color: #555; margin-bottom: 30px; }
     
-    /* フォーム周り */
     .form-group { margin-bottom: 15px; }
     label { color: #2a8b9d; font-weight: bold; display: block; margin-bottom: 5px; }
     input[type="email"], textarea { width: 100%; padding: 10px; border: 1px solid #7cd1df; border-radius: 10px; box-sizing: border-box; }
@@ -20,10 +18,11 @@
     button.submit-btn:hover:not(:disabled) { background: #f0f8fa; }
     button.submit-btn:disabled { background: #eee; border-color: #ccc; color: #999; cursor: not-allowed; }
 
-    /* 競合時のアラートメッセージ */
-    #busyMessage { display: none; background-color: #fff3cd; color: #856404; padding: 15px; margin-top: 15px; border-radius: 10px; border: 1px solid #ffeeba; text-align: center; font-weight: bold; font-size: 14px; }
+    /* メッセージエリアのスタイル */
+    .alert-msg { display: none; padding: 15px; margin-top: 15px; border-radius: 10px; text-align: center; font-weight: bold; font-size: 14px; }
+    .alert-busy { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+    .alert-success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
 
-    /* 履歴テーブル周り */
     .history-section { margin-top: 50px; border-top: 2px dashed #7cd1df; padding-top: 30px; }
     .history-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 10px; }
     .history-header h2 { color: #2a8b9d; font-size: 18px; margin: 0; }
@@ -64,8 +63,9 @@
       
       <button type="submit" id="submitBtn" class="submit-btn">送信</button>
       
-      <!-- 競合時の5秒間待機メッセージ（初期状態は非表示） -->
-      <div id="busyMessage">他の方が送信中です。<br>少し時間をおいて送信してください。</div>
+      <!-- メッセージ表示エリア（初期非表示） -->
+      <div id="busyMessage" class="alert-msg alert-busy">他の方が送信中です。<br>少し時間をおいて送信してください。</div>
+      <div id="successMessage" class="alert-msg alert-success">送信されました</div>
     </form>
 
     <!-- 履歴表示セクション -->
@@ -96,24 +96,24 @@
   </div>
 
   <script>
-    // ★先ほどGASをデプロイして発行されたURLをここに貼り付けてください
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwXfB0pWVxar9DUtGTd7oeWgzly7zrBtTPiHGn-2cb_JFU1wVIDoQH91pE0OOUSBLyZDw/exec";
+    // ★GASを「新しいデプロイ」して発行されたURLをここに貼り付けてください
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbynKyDu2vybXdmTg7DEbATlI6UmVmP5ZqfKtaMmpW9YHUsLCm_K1B2ZNRdfgIfaxRzbJQ/exec";
 
-    // 画面読み込み時に履歴を取得
     window.onload = loadHistory;
 
-    // フォーム送信処理
     async function handleFormSubmit(event) {
-      event.preventDefault(); // デフォルトの送信挙動をブロック
+      event.preventDefault(); 
 
       const form = document.getElementById('goodThingsForm');
       const btn = document.getElementById('submitBtn');
       const busyMsg = document.getElementById('busyMessage');
+      const successMsg = document.getElementById('successMessage');
 
-      // 送信中の状態に変更
+      // 送信開始時のUIリセット
       btn.disabled = true;
       btn.innerText = "送信中...";
-      busyMsg.style.display = "none"; // メッセージを隠す
+      busyMsg.style.display = "none"; 
+      successMsg.style.display = "none"; 
 
       const postData = {
         email: form.email.value,
@@ -123,8 +123,6 @@
       };
 
       try {
-        // Fetch APIでGASへ送信
-        // ※CORSエラーを回避するために 'Content-Type': 'text/plain' を使用するのがGAS APIの鉄則です
         const response = await fetch(GAS_API_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
@@ -133,27 +131,32 @@
         
         const result = await response.json();
 
-        // 競合エラー（busy）が返ってきた場合の処理（5秒間ロック）
+        // 競合エラーの場合
         if (result.status === "busy") {
-          busyMsg.style.display = "block"; // メッセージ表示
-          btn.innerText = "送信"; // テキストを元に戻す（ただしボタンは無効のまま）
+          busyMsg.style.display = "block"; 
+          btn.innerText = "送信"; 
           
-          // 5秒経過後に再度ボタンを押せるようにする
           setTimeout(() => {
             busyMsg.style.display = "none";
             btn.disabled = false;
-          }, 5000);
+          }, 5000); // 5秒後に消す＆ボタン復活
           
-          return; // 処理終了
+          return; 
         }
 
         // 成功した場合
         if (result.status === "success") {
-          form.reset(); // フォームをクリア
+          form.reset(); 
           btn.disabled = false;
           btn.innerText = "送信";
-          alert("送信が完了しました！");
-          loadHistory(); // 履歴を更新
+          
+          // 成功メッセージを5秒間表示
+          successMsg.style.display = "block";
+          setTimeout(() => {
+            successMsg.style.display = "none";
+          }, 5000); // 5秒後に消す
+
+          loadHistory(); 
         } else {
           throw new Error(result.message);
         }
@@ -165,7 +168,6 @@
       }
     }
 
-    // 履歴データをGASから取得
     async function loadHistory() {
       document.getElementById('lastUpdated').innerText = "更新中...";
       
@@ -177,7 +179,6 @@
           const tbody = document.querySelector('#historyTable tbody');
           tbody.innerHTML = ''; 
 
-          // 古いものが下、新しいものが上になるように reverse() で反転
           result.data.reverse().forEach(row => {
             const tr = document.createElement('tr');
             row.forEach(cellText => {
@@ -188,7 +189,6 @@
             tbody.appendChild(tr);
           });
 
-          // 最終更新時間を表示
           const now = new Date();
           document.getElementById('lastUpdated').innerText = "最終更新: " + now.toLocaleTimeString('ja-JP');
         } else {
