@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    /* 全体のスタイル（元のデザインを再現） */
+    body { font-family: sans-serif; background-color: #4fb2c9; padding: 20px; }
+    .container { background: white; border-radius: 20px; padding: 30px; max-width: 600px; margin: auto; }
+    h1 { color: #2a8b9d; text-align: center; margin-bottom: 10px;}
+    .subtitle { text-align: center; color: #555; margin-bottom: 30px; }
+    
+    /* フォーム周り */
+    .form-group { margin-bottom: 15px; }
+    label { color: #2a8b9d; font-weight: bold; display: block; margin-bottom: 5px; }
+    input[type="email"], textarea { width: 100%; padding: 10px; border: 1px solid #7cd1df; border-radius: 10px; box-sizing: border-box; }
+    button.submit-btn { width: 100%; padding: 15px; background: white; color: #2a8b9d; border: 2px solid #2a8b9d; border-radius: 20px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+    button.submit-btn:hover { background: #f0f8fa; }
+
+    /* 履歴テーブル周り */
+    .history-section { margin-top: 50px; border-top: 2px dashed #7cd1df; padding-top: 30px; }
+    .history-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 10px; }
+    .history-header h2 { color: #2a8b9d; font-size: 18px; margin: 0; }
+    .update-info { font-size: 12px; color: #666; text-align: right; }
+    button.refresh-btn { padding: 5px 15px; font-size: 12px; background: #fff; border: 1px solid #ccc; border-radius: 5px; cursor: pointer; margin-left: 10px;}
+    button.refresh-btn:hover { background: #eee; }
+    
+    .table-responsive { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 500px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background-color: #55c373; color: white; white-space: nowrap; } /* スプシの緑色に合わせる */
+    td { background-color: #fafafa; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>スリーグッドシングス</h1>
+    <p class="subtitle">今日あった３つの良いことを教えてください。</p>
+
+    <!-- 入力フォーム -->
+    <form id="goodThingsForm" onsubmit="handleFormSubmit(this); return false;">
+      <div class="form-group">
+        <label>メールアドレス (必須):</label>
+        <input type="email" name="email" required placeholder="example@gmail.com">
+      </div>
+      <div class="form-group">
+        <label>良いこと１ (必須):</label>
+        <textarea name="thing1" rows="3" required></textarea>
+      </div>
+      <div class="form-group">
+        <label>良いこと２ (必須):</label>
+        <textarea name="thing2" rows="3" required></textarea>
+      </div>
+      <div class="form-group">
+        <label>良いこと３ (必須):</label>
+        <textarea name="thing3" rows="3" required></textarea>
+      </div>
+      <button type="submit" id="submitBtn" class="submit-btn">送信</button>
+    </form>
+
+    <!-- 履歴表示セクション -->
+    <div class="history-section">
+      <div class="history-header">
+        <h2>みんなの投稿履歴</h2>
+        <div class="update-info">
+          <span id="lastUpdated">最終更新: --</span>
+          <button type="button" class="refresh-btn" onclick="loadHistory()">🔄 更新</button>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table id="historyTable">
+          <thead>
+            <tr>
+              <th>タイムスタンプ</th>
+              <th>スリーグッドシングス1</th>
+              <th>スリーグッドシングス2</th>
+              <th>スリーグッドシングス3</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- ここにデータがJavaScriptで挿入されます -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 画面読み込み時に履歴を取得
+    window.onload = loadHistory;
+
+    // フォーム送信処理
+    function handleFormSubmit(formObject) {
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.innerText = "送信中...";
+
+      google.script.run
+        .withSuccessHandler(function() {
+          formObject.reset(); // フォームをクリア
+          btn.disabled = false;
+          btn.innerText = "送信";
+          alert("送信が完了しました！");
+          loadHistory(); // 送信後に履歴を最新化
+        })
+        .withFailureHandler(function(error) {
+          btn.disabled = false;
+          btn.innerText = "送信";
+          alert("エラーが発生しました: " + error.message);
+        })
+        .submitData(formObject.email.value, formObject.thing1.value, formObject.thing2.value, formObject.thing3.value);
+    }
+
+    // 履歴データをサーバーから取得
+    function loadHistory() {
+      document.getElementById('lastUpdated').innerText = "更新中...";
+      google.script.run
+        .withSuccessHandler(updateTable)
+        .withFailureHandler(function(error) {
+           document.getElementById('lastUpdated').innerText = "更新失敗";
+           alert("データの取得に失敗しました。");
+        })
+        .getHistoryData();
+    }
+
+    // 取得したデータでテーブルを描画
+    function updateTable(data) {
+      const tbody = document.querySelector('#historyTable tbody');
+      tbody.innerHTML = ''; // テーブルの中身をリセット
+
+      // 最新の投稿を上に表示したい場合は data.reverse() を使用します
+      data.reverse().forEach(function(row) {
+        const tr = document.createElement('tr');
+        row.forEach(function(cellText) {
+          const td = document.createElement('td');
+          td.textContent = cellText;
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+
+      // 最終更新時間を表示
+      const now = new Date();
+      const timeString = now.toLocaleTimeString('ja-JP');
+      document.getElementById('lastUpdated').innerText = "最終更新: " + timeString;
+    }
+  </script>
+</body>
+</html>
