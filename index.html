@@ -1,11 +1,13 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
-  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>スリーグッドシングス</title>
   <style>
-    /* 全体のスタイル（元のデザインを再現） */
-    body { font-family: sans-serif; background-color: #4fb2c9; padding: 20px; }
-    .container { background: white; border-radius: 20px; padding: 30px; max-width: 600px; margin: auto; }
+    /* 全体のスタイル */
+    body { font-family: sans-serif; background-color: #4fb2c9; padding: 20px; margin: 0; }
+    .container { background: white; border-radius: 20px; padding: 30px; max-width: 600px; margin: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
     h1 { color: #2a8b9d; text-align: center; margin-bottom: 10px;}
     .subtitle { text-align: center; color: #555; margin-bottom: 30px; }
     
@@ -13,8 +15,13 @@
     .form-group { margin-bottom: 15px; }
     label { color: #2a8b9d; font-weight: bold; display: block; margin-bottom: 5px; }
     input[type="email"], textarea { width: 100%; padding: 10px; border: 1px solid #7cd1df; border-radius: 10px; box-sizing: border-box; }
-    button.submit-btn { width: 100%; padding: 15px; background: white; color: #2a8b9d; border: 2px solid #2a8b9d; border-radius: 20px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; }
-    button.submit-btn:hover { background: #f0f8fa; }
+    
+    button.submit-btn { width: 100%; padding: 15px; background: white; color: #2a8b9d; border: 2px solid #2a8b9d; border-radius: 20px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; transition: 0.3s; }
+    button.submit-btn:hover:not(:disabled) { background: #f0f8fa; }
+    button.submit-btn:disabled { background: #eee; border-color: #ccc; color: #999; cursor: not-allowed; }
+
+    /* 競合時のアラートメッセージ */
+    #busyMessage { display: none; background-color: #fff3cd; color: #856404; padding: 15px; margin-top: 15px; border-radius: 10px; border: 1px solid #ffeeba; text-align: center; font-weight: bold; font-size: 14px; }
 
     /* 履歴テーブル周り */
     .history-section { margin-top: 50px; border-top: 2px dashed #7cd1df; padding-top: 30px; }
@@ -27,7 +34,7 @@
     .table-responsive { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 500px; }
     th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-    th { background-color: #55c373; color: white; white-space: nowrap; } /* スプシの緑色に合わせる */
+    th { background-color: #55c373; color: white; white-space: nowrap; }
     td { background-color: #fafafa; }
   </style>
 </head>
@@ -37,7 +44,7 @@
     <p class="subtitle">今日あった３つの良いことを教えてください。</p>
 
     <!-- 入力フォーム -->
-    <form id="goodThingsForm" onsubmit="handleFormSubmit(this); return false;">
+    <form id="goodThingsForm" onsubmit="handleFormSubmit(event)">
       <div class="form-group">
         <label>メールアドレス (必須):</label>
         <input type="email" name="email" required placeholder="example@gmail.com">
@@ -54,7 +61,11 @@
         <label>良いこと３ (必須):</label>
         <textarea name="thing3" rows="3" required></textarea>
       </div>
+      
       <button type="submit" id="submitBtn" class="submit-btn">送信</button>
+      
+      <!-- 競合時の5秒間待機メッセージ（初期状態は非表示） -->
+      <div id="busyMessage">他の方が送信中です。<br>少し時間をおいて送信してください。</div>
     </form>
 
     <!-- 履歴表示セクション -->
@@ -77,7 +88,7 @@
             </tr>
           </thead>
           <tbody>
-            <!-- ここにデータがJavaScriptで挿入されます -->
+            <!-- 履歴データが挿入されます -->
           </tbody>
         </table>
       </div>
@@ -85,63 +96,108 @@
   </div>
 
   <script>
+    // ★先ほどGASをデプロイして発行されたURLをここに貼り付けてください
+    const GAS_API_URL = "https://script.google.com/macros/s/XXXXXXXXXXXXXXXXXXXX/exec";
+
     // 画面読み込み時に履歴を取得
     window.onload = loadHistory;
 
     // フォーム送信処理
-    function handleFormSubmit(formObject) {
+    async function handleFormSubmit(event) {
+      event.preventDefault(); // デフォルトの送信挙動をブロック
+
+      const form = document.getElementById('goodThingsForm');
       const btn = document.getElementById('submitBtn');
+      const busyMsg = document.getElementById('busyMessage');
+
+      // 送信中の状態に変更
       btn.disabled = true;
       btn.innerText = "送信中...";
+      busyMsg.style.display = "none"; // メッセージを隠す
 
-      google.script.run
-        .withSuccessHandler(function() {
-          formObject.reset(); // フォームをクリア
+      const postData = {
+        email: form.email.value,
+        thing1: form.thing1.value,
+        thing2: form.thing2.value,
+        thing3: form.thing3.value
+      };
+
+      try {
+        // Fetch APIでGASへ送信
+        // ※CORSエラーを回避するために 'Content-Type': 'text/plain' を使用するのがGAS APIの鉄則です
+        const response = await fetch(GAS_API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify(postData)
+        });
+        
+        const result = await response.json();
+
+        // 競合エラー（busy）が返ってきた場合の処理（5秒間ロック）
+        if (result.status === "busy") {
+          busyMsg.style.display = "block"; // メッセージ表示
+          btn.innerText = "送信"; // テキストを元に戻す（ただしボタンは無効のまま）
+          
+          // 5秒経過後に再度ボタンを押せるようにする
+          setTimeout(() => {
+            busyMsg.style.display = "none";
+            btn.disabled = false;
+          }, 5000);
+          
+          return; // 処理終了
+        }
+
+        // 成功した場合
+        if (result.status === "success") {
+          form.reset(); // フォームをクリア
           btn.disabled = false;
           btn.innerText = "送信";
           alert("送信が完了しました！");
-          loadHistory(); // 送信後に履歴を最新化
-        })
-        .withFailureHandler(function(error) {
-          btn.disabled = false;
-          btn.innerText = "送信";
-          alert("エラーが発生しました: " + error.message);
-        })
-        .submitData(formObject.email.value, formObject.thing1.value, formObject.thing2.value, formObject.thing3.value);
+          loadHistory(); // 履歴を更新
+        } else {
+          throw new Error(result.message);
+        }
+
+      } catch (error) {
+        alert("エラーが発生しました: " + error.message);
+        btn.disabled = false;
+        btn.innerText = "送信";
+      }
     }
 
-    // 履歴データをサーバーから取得
-    function loadHistory() {
+    // 履歴データをGASから取得
+    async function loadHistory() {
       document.getElementById('lastUpdated').innerText = "更新中...";
-      google.script.run
-        .withSuccessHandler(updateTable)
-        .withFailureHandler(function(error) {
-           document.getElementById('lastUpdated').innerText = "更新失敗";
-           alert("データの取得に失敗しました。");
-        })
-        .getHistoryData();
-    }
+      
+      try {
+        const response = await fetch(GAS_API_URL);
+        const result = await response.json();
 
-    // 取得したデータでテーブルを描画
-    function updateTable(data) {
-      const tbody = document.querySelector('#historyTable tbody');
-      tbody.innerHTML = ''; // テーブルの中身をリセット
+        if (result.status === "success") {
+          const tbody = document.querySelector('#historyTable tbody');
+          tbody.innerHTML = ''; 
 
-      // 最新の投稿を上に表示したい場合は data.reverse() を使用します
-      data.reverse().forEach(function(row) {
-        const tr = document.createElement('tr');
-        row.forEach(function(cellText) {
-          const td = document.createElement('td');
-          td.textContent = cellText;
-          tr.appendChild(td);
-        });
-        tbody.appendChild(tr);
-      });
+          // 古いものが下、新しいものが上になるように reverse() で反転
+          result.data.reverse().forEach(row => {
+            const tr = document.createElement('tr');
+            row.forEach(cellText => {
+              const td = document.createElement('td');
+              td.textContent = cellText;
+              tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+          });
 
-      // 最終更新時間を表示
-      const now = new Date();
-      const timeString = now.toLocaleTimeString('ja-JP');
-      document.getElementById('lastUpdated').innerText = "最終更新: " + timeString;
+          // 最終更新時間を表示
+          const now = new Date();
+          document.getElementById('lastUpdated').innerText = "最終更新: " + now.toLocaleTimeString('ja-JP');
+        } else {
+          throw new Error(result.message);
+        }
+      } catch (error) {
+        document.getElementById('lastUpdated').innerText = "更新失敗";
+        console.error("履歴取得エラー:", error);
+      }
     }
   </script>
 </body>
