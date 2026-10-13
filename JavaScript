@@ -1,0 +1,31 @@
+// GETリクエスト時の処理（画面表示）
+function doGet() {
+  return HtmlService.createTemplateFromFile('index')
+      .evaluate()
+      .setTitle('スリーグッドシングス')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+// フォームからデータを受け取りスプレッドシートに書き込む処理
+function submitData(email, thing1, thing2, thing3) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  // タイムスタンプを生成（スプレッドシートのB列の形式に合わせる）
+  const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy年MM月dd日HH時mm分ss秒");
+  
+  // A列:Email, B列:タイムスタンプ, C〜E列:内容
+  sheet.appendRow([email, timestamp, thing1, thing2, thing3]);
+  return true;
+}
+
+// スプレッドシートのB列〜E列（履歴）を取得する処理
+function getHistoryData() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const lastRow = sheet.getLastRow();
+  
+  // 見出し行(1行目)のみ、またはデータがない場合は空配列を返す
+  if (lastRow < 2) return [];
+
+  // 2行目の2列目(B列)から、データがある行までの4列分(B〜E列)を取得
+  const range = sheet.getRange(2, 2, lastRow - 1, 4);
+  return range.getDisplayValues(); // セルの表示形式のまま文字列として取得
+}
